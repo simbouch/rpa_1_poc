@@ -16,3 +16,14 @@ if uploaded_file:
     
     st.success("Extraction réussie ✅")
     st.json(donnees)
+
+import spacy
+
+try:
+    nlp = spacy.load("fr_core_news_md")
+    print("✔️ Modèle fr_core_news_md chargé (version {})".format(nlp.meta["version"]))
+except OSError:
+    raise RuntimeError(
+        "Le modèle SpaCy 'fr_core_news_md' n'est pas installé en production. "
+        "Vérifiez votre requirements.txt et que la build a correctement installé ce package."
+    )
