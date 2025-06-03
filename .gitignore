@@ -1,0 +1,10 @@
+# Ignorer l’environnement virtuel Python
+venv/
+
+# Ignorer les caches Python
+__pycache__/
+*.py[cod]
+
+# Ignorer logs et fichiers temporaires
+*.log
+*.tmp
