@@ -18,12 +18,18 @@ logger = logging.getLogger(__name__)
 
 class ModelManager:
     """Gestionnaire de modèles NER pour l'extraction PDF."""
-    
-    def __init__(self, base_path: str = "training"):
+
+    def __init__(self, base_path: str = "models"):
         self.base_path = Path(base_path)
-        self.models_dir = self.base_path / "models"
-        self.active_model_path = self.base_path / "model_output" / "model-best"
+        self.models_dir = Path(base_path)
         self.models_dir.mkdir(exist_ok=True)
+
+        # Modèles disponibles
+        self.available_models = {
+            "general": "models/general_model",
+            "medical": "models/medical_model",
+            "legal": "models/legal_model"
+        }
     
     def list_models(self) -> List[Dict]:
         """Liste tous les modèles disponibles avec leurs métadonnées."""

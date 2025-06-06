@@ -3,77 +3,131 @@ import tempfile
 import os
 import json
 from datetime import datetime
-from extraction_enhanced import PDFExtractor, get_available_models
+from extraction_enhanced import PDFExtractor
 
 # Configuration de la page
 st.set_page_config(
-    page_title="🧠 IA : Extraction PDF",
+    page_title="🧠 IA : Extraction PDF Pro",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
 # Titre principal
 st.title("🧠 Prototype IA : Extraction de données de documents PDF")
-st.markdown("### 🚀 Extraction automatique d'informations depuis des rapports PDF")
+st.markdown("### 🚀 Système professionnel multi-modèles pour l'extraction automatique")
 st.markdown("---")
 
 # Sidebar pour la configuration
-st.sidebar.header("⚙️ Configuration")
+st.sidebar.header("⚙️ Configuration du modèle")
 
-# Sélection du modèle
+# Fonction pour détecter les modèles disponibles
+@st.cache_data
+def get_available_models():
+    """Détecte tous les modèles disponibles."""
+    models = {}
+
+    # Modèle spaCy par défaut
+    try:
+        import spacy
+        spacy.load("fr_core_news_md")
+        models["spacy_default"] = {
+            "name": "📚 Modèle spaCy par défaut",
+            "description": "Modèle français général de spaCy",
+            "path": None,
+            "type": "default"
+        }
+    except:
+        pass
+
+    # Modèle général entraîné
+    if os.path.exists("models/general_model"):
+        models["general"] = {
+            "name": "🎯 Modèle général entraîné",
+            "description": "Modèle entraîné pour documents généraux",
+            "path": "models/general_model",
+            "type": "trained"
+        }
+
+    # Modèle médical
+    if os.path.exists("models/medical_model"):
+        models["medical"] = {
+            "name": "🏥 Modèle médical spécialisé",
+            "description": "Modèle spécialisé pour rapports médicaux",
+            "path": "models/medical_model",
+            "type": "trained"
+        }
+
+    # Modèle juridique
+    if os.path.exists("models/legal_model"):
+        models["legal"] = {
+            "name": "⚖️ Modèle juridique spécialisé",
+            "description": "Modèle spécialisé pour documents juridiques",
+            "path": "models/legal_model",
+            "type": "trained"
+        }
+
+    return models
+
+# Chargement des modèles disponibles
 available_models = get_available_models()
-if available_models:
-    model_options = {}
-    for model in available_models:
-        if "model-best" in model:
-            model_options["🎯 Modèle entraîné (recommandé)"] = model
-        else:
-            model_options["📚 Modèle par défaut (fr_core_news_md)"] = model
 
-    if len(model_options) > 0:
-        selected_model_name = st.sidebar.selectbox(
-            "Choisir le modèle d'extraction:",
-            options=list(model_options.keys()),
-            index=0 if "🎯 Modèle entraîné (recommandé)" in model_options else 0
-        )
-        selected_model_path = model_options[selected_model_name]
-    else:
-        st.sidebar.error("❌ Aucun modèle disponible")
-        st.stop()
-else:
+if not available_models:
     st.sidebar.error("❌ Aucun modèle disponible")
     st.stop()
 
-# Options d'affichage
-show_metadata = st.sidebar.checkbox("Afficher les métadonnées", value=True)
-show_confidence = st.sidebar.checkbox("Afficher les scores de confiance", value=False)
+# Sélection du modèle
+selected_model_id = st.sidebar.selectbox(
+    "Choisir le modèle d'extraction:",
+    options=list(available_models.keys()),
+    format_func=lambda x: available_models[x]["name"],
+    index=0
+)
 
-# Informations sur le modèle sélectionné
+selected_model = available_models[selected_model_id]
+
+# Affichage des informations du modèle
 st.sidebar.markdown("---")
 st.sidebar.subheader("📊 Informations du modèle")
-if "model-best" in selected_model_path:
-    st.sidebar.success("✅ Modèle personnalisé actif")
-    model_info_path = "training/model_output/model_info.json"
-    if os.path.exists(model_info_path):
+st.sidebar.info(f"**Type:** {selected_model['description']}")
+
+if selected_model["type"] == "trained" and selected_model["path"]:
+    metadata_path = f"{selected_model['path']}/model_info.json"
+    if os.path.exists(metadata_path):
         try:
-            with open(model_info_path, 'r', encoding='utf-8') as f:
-                model_info = json.load(f)
-            st.sidebar.info(f"Version: {model_info.get('version', 'N/A')}")
-            st.sidebar.info(f"Créé: {model_info.get('created_at', 'N/A')}")
+            with open(metadata_path, 'r', encoding='utf-8') as f:
+                metadata = json.load(f)
+            st.sidebar.success("✅ Modèle personnalisé actif")
+            st.sidebar.info(f"**Version:** {metadata.get('version', 'N/A')}")
+            st.sidebar.info(f"**Créé:** {metadata.get('created_at', 'N/A')[:10]}")
+            if "performance" in metadata:
+                perf = metadata["performance"]
+                st.sidebar.info(f"**Précision:** {perf.get('precision', 0):.2%}")
         except:
             pass
 else:
     st.sidebar.info("📚 Modèle spaCy par défaut")
 
-# Chargement du modèle
-@st.cache_resource(show_spinner=False)
+# Options d'affichage
+st.sidebar.markdown("---")
+st.sidebar.subheader("🔧 Options d'affichage")
+show_metadata = st.sidebar.checkbox("Afficher les métadonnées", value=True)
+show_confidence = st.sidebar.checkbox("Afficher les scores", value=False)
+
+# Section gestion des modèles
+st.sidebar.markdown("---")
+st.sidebar.subheader("🚀 Gestion des modèles")
+st.sidebar.info(f"**Modèles disponibles:** {len(available_models)}")
+
+if st.sidebar.button("🔄 Actualiser les modèles"):
+    st.cache_data.clear()
+    st.rerun()
+
+# Fonction pour charger l'extracteur
+@st.cache_resource
 def load_extractor(model_path):
     """Charge l'extracteur avec le modèle spécifié."""
     try:
-        if "fr_core_news_md" in model_path:
-            return PDFExtractor(None)  # Utilise le modèle par défaut
-        else:
-            return PDFExtractor(model_path)
+        return PDFExtractor(model_path)
     except Exception as e:
         st.error(f"❌ Erreur lors du chargement du modèle: {e}")
         return None
@@ -86,7 +140,7 @@ with col1:
     uploaded_file = st.file_uploader(
         "Télécharger un rapport PDF à analyser",
         type=["pdf"],
-        help="Formats supportés: PDF uniquement"
+        help="Formats supportés: PDF uniquement. Taille max: 200MB"
     )
 
 with col2:
@@ -99,13 +153,33 @@ with col2:
     - **Service** demandeur
     """)
 
+    # Statistiques du modèle
+    if selected_model["type"] == "trained":
+        st.markdown("### 📊 Performances")
+        metadata_path = f"{selected_model['path']}/model_info.json"
+        if os.path.exists(metadata_path):
+            try:
+                with open(metadata_path, 'r', encoding='utf-8') as f:
+                    metadata = json.load(f)
+                if "performance" in metadata:
+                    perf = metadata["performance"]
+                    col_a, col_b = st.columns(2)
+                    with col_a:
+                        st.metric("Précision", f"{perf.get('precision', 0):.1%}")
+                    with col_b:
+                        st.metric("Rappel", f"{perf.get('recall', 0):.1%}")
+            except:
+                pass
+
 # Traitement du fichier
 if uploaded_file:
-    # Charger l'extracteur
-    extracteur = load_extractor(selected_model_path)
+    # Charger l'extracteur avec le modèle sélectionné
+    model_path = selected_model["path"]
+    extracteur = load_extractor(model_path)
+
     if not extracteur:
         st.stop()
-    
+
     # Enregistrement temporaire du PDF
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
         tmp_file.write(uploaded_file.read())
@@ -114,26 +188,28 @@ if uploaded_file:
     # Affichage des informations du fichier
     st.markdown("---")
     st.subheader("📋 Informations du fichier")
-    
-    col1, col2, col3 = st.columns(3)
+
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
-        st.metric("Nom du fichier", uploaded_file.name)
+        st.metric("Nom", uploaded_file.name[:20] + "..." if len(uploaded_file.name) > 20 else uploaded_file.name)
     with col2:
         st.metric("Taille", f"{uploaded_file.size / 1024:.1f} KB")
     with col3:
         st.metric("Type", uploaded_file.type)
+    with col4:
+        st.metric("Modèle", selected_model["name"].split()[1])
 
     # Extraction
     st.markdown("---")
     st.subheader("🔍 Résultats de l'extraction")
-    
-    with st.spinner("Analyse en cours..."):
+
+    with st.spinner(f"Analyse en cours avec {selected_model['name']}..."):
         try:
             start_time = datetime.now()
             donnees = extracteur.extraire_infos(chemin_temp)
             end_time = datetime.now()
             processing_time = (end_time - start_time).total_seconds()
-            
+
         except Exception as e:
             st.error(f"❌ Une erreur est survenue lors de l'extraction :\n{e}")
             st.stop()
@@ -160,23 +236,31 @@ if uploaded_file:
         
         with col2:
             st.markdown("### 📁 Export des données")
-            
-            # Bouton de téléchargement JSON
+
+            # Statistiques d'extraction
+            st.info(f"**Méthode utilisée:** {metadata.get('extraction_method', 'N/A').title()}")
+
+            # Boutons de téléchargement
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+
+            # JSON
             json_data = json.dumps(donnees, indent=2, ensure_ascii=False)
             st.download_button(
-                label="💾 Télécharger en JSON",
+                label="💾 Télécharger JSON",
                 data=json_data,
-                file_name=f"extraction_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
-                mime="application/json"
+                file_name=f"extraction_{timestamp}.json",
+                mime="application/json",
+                use_container_width=True
             )
-            
-            # Bouton de téléchargement CSV
-            csv_data = "\n".join([f"{k},{v}" for k, v in donnees.items()])
+
+            # CSV
+            csv_data = "Champ,Valeur\n" + "\n".join([f'"{k}","{v}"' for k, v in donnees.items()])
             st.download_button(
-                label="📊 Télécharger en CSV",
+                label="📊 Télécharger CSV",
                 data=csv_data,
-                file_name=f"extraction_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
-                mime="text/csv"
+                file_name=f"extraction_{timestamp}.csv",
+                mime="text/csv",
+                use_container_width=True
             )
         
         # Métadonnées (si activées)
@@ -201,25 +285,39 @@ if uploaded_file:
     else:
         st.warning("⚠️ Aucune donnée extraite du document")
 
-# Nettoyage
-try:
-    if 'chemin_temp' in locals():
+    # Nettoyage
+    try:
         os.unlink(chemin_temp)
-except:
-    pass
+    except:
+        pass
 
 # Footer avec informations
 st.markdown("---")
-st.markdown("""
-### 📚 À propos
-Cette application utilise l'intelligence artificielle pour extraire automatiquement des informations 
-structurées depuis des documents PDF. Elle combine des modèles de traitement du langage naturel (NLP) 
-avec des techniques de reconnaissance d'entités nommées (NER).
+col1, col2, col3 = st.columns(3)
 
-**Technologies utilisées:**
-- spaCy pour le traitement du langage naturel
-- pdfplumber pour l'extraction de texte PDF
-- Streamlit pour l'interface utilisateur
+with col1:
+    st.markdown("### 📚 Technologies")
+    st.markdown("""
+    - **spaCy** - NLP et NER
+    - **pdfplumber** - Extraction PDF
+    - **Streamlit** - Interface web
+    - **Python** - Backend
+    """)
 
-**Développé par:** Équipe RPA - Prototype v1.0
-""")
+with col2:
+    st.markdown("### 🎯 Modèles disponibles")
+    for model_id, model_info in available_models.items():
+        icon = "✅" if model_id == selected_model_id else "⚪"
+        st.markdown(f"{icon} {model_info['name']}")
+
+with col3:
+    st.markdown("### 🚀 Fonctionnalités")
+    st.markdown("""
+    - **Multi-modèles** - Choix du modèle
+    - **Extraction robuste** - NER + Regex
+    - **Export multiple** - JSON, CSV
+    - **Interface moderne** - Streamlit
+    """)
+
+st.markdown("---")
+st.markdown("**Développé par :** Équipe RPA - Prototype v2.0 Professional")
